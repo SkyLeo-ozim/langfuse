@@ -109,6 +109,10 @@ services:
     volumes:
       - langfuse_clickhouse_data:/var/lib/clickhouse
       - langfuse_clickhouse_logs:/var/log/clickhouse-server
+      # Low-resource overrides: cap background thread pools to match cpus: 1.5.
+      # Without this ClickHouse sizes pools to host cores (~717 threads) and
+      # burns CPU spinning against the cgroup limit even when idle.
+      - ./clickhouse-config.d:/etc/clickhouse-server/config.d:ro
     # ClickHouse host port mappings disabled to avoid conflicts with existing
     # containers (attu on 8123, milvus-minio on 9000). Langfuse services reach
     # ClickHouse via the docker network (clickhouse:8123 / clickhouse:9000),

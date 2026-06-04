@@ -1,0 +1,63 @@
+<clickhouse>
+    <!--
+      Bind-mounting this directory onto /etc/clickhouse-server/config.d hides
+      the image's stock docker_related_config.xml, which sets listen_host so
+      the server accepts cross-container connections. Without restoring it the
+      server only listens on localhost: the 8123 healthcheck still passes but
+      langfuse-web/worker get "connection refused" on clickhouse:9000.
+    -->
+    <listen_host>0.0.0.0</listen_host>
+    <listen_try>1</listen_try>
+
+    <!--
+      Low-resource overrides for a small single-host deployment (2 logical
+      cores, cpus: 1.5 in docker-compose.yml). ClickHouse's default background
+      pools assume a bigger box and spawn many threads; these cap them.
+
+      NOTE: background_pool_size * background_merges_mutations_concurrency_ratio
+      must stay >= the merge_tree number_of_free_entries_in_pool_to_* values
+      below, or the server refuses to start (Code 36, BAD_ARGUMENTS).
+    -->
+    <background_pool_size>8</background_pool_size>
+    <background_schedule_pool_size>4</background_schedule_pool_size>
+    <background_common_pool_size>2</background_common_pool_size>
+    <background_merges_mutations_concurrency_ratio>2</background_merges_mutations_concurrency_ratio>
+    <background_buffer_flush_schedule_pool_size>2</background_buffer_flush_schedule_pool_size>
+    <background_distributed_schedule_pool_size>2</background_distributed_schedule_pool_size>
+    <background_message_broker_schedule_pool_size>2</background_message_broker_schedule_pool_size>
+    <background_fetches_pool_size>2</background_fetches_pool_size>
+    <background_move_pool_size>2</background_move_pool_size>
+
+    <!-- Slow down the per-second async metric refresh. -->
+    <asynchronous_metrics_update_period_s>60</asynchronous_metrics_update_period_s>
+
+    <!-- Lower the merge/mutation pool thresholds to match the small pools above. -->
+    <merge_tree>
+        <number_of_free_entries_in_pool_to_execute_mutation>4</number_of_free_entries_in_pool_to_execute_mutation>
+        <number_of_free_entries_in_pool_to_lower_max_size_of_merge>4</number_of_free_entries_in_pool_to_lower_max_size_of_merge>
+        <number_of_free_entries_in_pool_to_execute_optimize_entire_partition>4</number_of_free_entries_in_pool_to_execute_optimize_entire_partition>
+    </merge_tree>
+
+    <!--
+      Disable ClickHouse's internal system log tables. These insert every
+      second (metric_log, asynchronous_metric_log) or on every event, creating
+      a constant stream of small parts that trigger background merges. On this
+      2-core host those merges peg ~1.5 cores even with zero Langfuse traffic.
+      Langfuse does not use these tables; removing them stops the self-inflicted
+      insert -> part -> merge loop. (`remove="1"` deletes the section defined in
+      the stock config.xml.)
+    -->
+    <metric_log remove="1"/>
+    <asynchronous_metric_log remove="1"/>
+    <trace_log remove="1"/>
+    <text_log remove="1"/>
+    <part_log remove="1"/>
+    <opentelemetry_span_log remove="1"/>
+    <processors_profile_log remove="1"/>
+    <query_views_log remove="1"/>
+    <session_log remove="1"/>
+    <error_log remove="1"/>
+    <backup_log remove="1"/>
+    <blob_storage_log remove="1"/>
+    <!-- query_log kept (low-frequency, useful for debugging Langfuse queries). -->
+</clickhouse>
