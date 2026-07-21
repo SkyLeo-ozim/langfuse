@@ -25,6 +25,7 @@ import { InlineCommentBubble } from "@/src/features/comments/components/InlineCo
 import { type CommentedPathsByField } from "@/src/components/ui/AdvancedJsonViewer/utils/commentRanges";
 import { type ExpansionState } from "@/src/components/ui/AdvancedJsonViewer/types";
 import { type Prisma, type ScoreDomain, deepParseJson } from "@langfuse/shared";
+import { decodeUnicodeInJson } from "@/src/utils/decodeUnicodeInJson";
 import { CorrectedOutputField } from "./components/CorrectedOutputField";
 
 const VIRTUALIZATION_THRESHOLD = 3333;
@@ -122,19 +123,24 @@ function IOPreviewJSONInner({
 
   // Fall back to raw values when caller does not provide pre-parsed fields
   // (e.g. session events rows in v4 mode).
+  // Decode \uXXXX escapes (e.g. Japanese ingested with Python
+  // ensure_ascii=True) at the data source so that search-match offsets, comment
+  // ranges, rendering and copy-to-clipboard all operate on the same decoded
+  // strings. Decoding at the leaf renderer instead would desync highlight
+  // offsets. Already-decoded strings are a no-op.
   const effectiveInput = useMemo(() => {
     if (isParsing) return undefined;
-    return parsedInput ?? deepParseJson(input);
+    return decodeUnicodeInJson(parsedInput ?? deepParseJson(input));
   }, [parsedInput, input, isParsing]);
 
   const effectiveOutput = useMemo(() => {
     if (isParsing) return undefined;
-    return parsedOutput ?? deepParseJson(output);
+    return decodeUnicodeInJson(parsedOutput ?? deepParseJson(output));
   }, [parsedOutput, output, isParsing]);
 
   const effectiveMetadata = useMemo(() => {
     if (isParsing) return undefined;
-    return parsedMetadata ?? deepParseJson(metadata);
+    return decodeUnicodeInJson(parsedMetadata ?? deepParseJson(metadata));
   }, [parsedMetadata, metadata, isParsing]);
 
   const showInput = !hideInput && !(hideIfNull && effectiveInput === undefined);
@@ -224,7 +230,7 @@ function IOPreviewJSONInner({
     if (showOutput) dataObj.output = effectiveOutput;
     if (showMetadata) dataObj.metadata = effectiveMetadata;
     const jsonString = JSON.stringify(dataObj, null, 2);
-    void navigator.clipboard.writeText(jsonString);
+    navigator.clipboard.writeText(jsonString);
   }, [
     showInput,
     showOutput,
@@ -461,13 +467,13 @@ function IOPreviewJSONInner({
         {needsVirtualization && (
           <HoverCard>
             <HoverCardTrigger asChild>
-              <span className="bg-muted text-muted-foreground ml-auto cursor-help rounded px-1.5 py-px text-[10px] font-medium">
+              <span className="bg-muted text-muted-foreground ml-auto cursor-help rounded px-1.5 py-px text-[10px] font-bold">
                 Virtualized
               </span>
             </HoverCardTrigger>
             <HoverCardContent className="w-80" side="bottom" align="end">
               <div className="space-y-2">
-                <p className="text-sm font-medium">Virtualized View</p>
+                <p className="text-sm font-bold">Virtualized View</p>
                 <p className="text-muted-foreground text-xs">
                   This view is using virtualization due to a large number of
                   keys ({rowCounts.input.toLocaleString()} input,{" "}
